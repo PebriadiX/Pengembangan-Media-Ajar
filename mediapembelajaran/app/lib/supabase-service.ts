@@ -26,10 +26,26 @@ export type PlatformStatePayload = {
 
 export type EvaluationResultItem = {
   id: number;
+  student_id?: string;
   student_name: string;
   score: number;
   answers: Record<string, string>;
   submitted_at: string;
+};
+
+export type UserRowPayload = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export type ProfileRowItem = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  updated_at: string;
 };
 
 export type AssignmentSubmissionItem = {
@@ -232,7 +248,7 @@ export async function loadEvaluationResultsFromSupabase(): Promise<EvaluationRes
       return [];
     }
     // Map to EvaluationResultItem[]
-    return (data ?? []).map((r: any) => ({ id: Number(r.id), student_id: String(r.id), student_name: String(r.student_name ?? ""), score: Number(r.score ?? 0), submitted_at: (r.submitted_at ?? new Date()).toString() }));
+    return (data ?? []).map((r: any) => ({ id: Number(r.id), student_id: String(r.student_id ?? ""), student_name: String(r.student_name ?? ""), score: Number(r.score ?? 0), answers: (r.answers ?? {}) as Record<string, string>, submitted_at: (r.submitted_at ?? new Date()).toString() }));
   } catch (err) {
     console.warn("loadEvaluationResultsFromSupabase: exception", err);
     return [];
@@ -241,6 +257,59 @@ export async function loadEvaluationResultsFromSupabase(): Promise<EvaluationRes
 
 export async function loadAssignmentSubmissionsFromSupabase(): Promise<AssignmentSubmissionItem[]> {
   return [];
+}
+
+export async function loadUsersFromSupabase(): Promise<UserRowPayload[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, name, email, role")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.warn("loadUsersFromSupabase: select error", error);
+      return [];
+    }
+
+    return (data ?? []).map((user: any) => ({
+      id: String(user.id),
+      name: String(user.name ?? ""),
+      email: String(user.email ?? ""),
+      role: String(user.role ?? "siswa"),
+    }));
+  } catch (err) {
+    console.warn("loadUsersFromSupabase: exception", err);
+    return [];
+  }
+}
+
+export async function loadProfilesFromSupabase(): Promise<ProfileRowItem[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, name, email, role, updated_at")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      console.warn("loadProfilesFromSupabase: select error", error);
+      return [];
+    }
+
+    return (data ?? []).map((profile: any) => ({
+      id: String(profile.id),
+      name: String(profile.name ?? ""),
+      email: String(profile.email ?? ""),
+      role: String(profile.role ?? "siswa"),
+      updated_at: String(profile.updated_at ?? new Date().toISOString()),
+    }));
+  } catch (err) {
+    console.warn("loadProfilesFromSupabase: exception", err);
+    return [];
+  }
 }
 
 export async function loadRegisteredStudentsFromSupabase(): Promise<StudentItem[]> {
