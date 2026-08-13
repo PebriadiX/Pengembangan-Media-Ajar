@@ -18,16 +18,16 @@ type EvaluationSectionProps = {
   onProgressUpdate?: (delta: number) => void;
 };
 
+const EXAM_DURATION_SECONDS = 20 * 60;
+const MAX_VIOLATIONS = 3;
+const VIOLATION_COOLDOWN_MS = 1200;
+const OPTION_LABELS = ["A", "B", "C"] as const;
+
 type SubmitReason = "manual" | "timeout" | "violation";
 
 type SubmitOptions = {
   reason?: SubmitReason;
 };
-
-const EXAM_DURATION_SECONDS = 20 * 60;
-const MAX_VIOLATIONS = 3;
-const VIOLATION_COOLDOWN_MS = 1200;
-const OPTION_LABELS = ["A", "B", "C"] as const;
 
 export function EvaluationSection({
   questions,
@@ -62,27 +62,30 @@ export function EvaluationSection({
   const examPanelRef = useRef<HTMLDivElement | null>(null);
 
   const lastViolationAtRef = useRef(0);
+
   const submitAttemptedRef = useRef(false);
+
   const hasCompletionNotificationFiredRef = useRef(false);
+
   const isFullscreenActiveRef = useRef(false);
+
   const isExamActiveRef = useRef(false);
 
   /*
-   * PERBAIKAN UTAMA:
-   *
-   * Sebelumnya:
-   * useRef<(...) => Promise<void>>();
-   *
-   * Sekarang:
-   * useRef<((...) => Promise<void>) | null>(null);
-   *
-   * useRef wajib mempunyai initial value.
+   * FIX:
+   * useRef harus memiliki initial value.
+   * Sebelumnya useRef() tanpa argument menyebabkan:
+   * "Expected 1 arguments, but got 0."
    */
   const handleSubmitRef = useRef<
     ((options?: SubmitOptions) => Promise<void>) | null
   >(null);
 
-  const handleViolationRef = useRef<(reason: string) => void>(() => {});
+  /*
+   * FIX:
+   * Gunakan null sebagai nilai awal sehingga tipe ref valid di TypeScript.
+   */
+  const handleViolationRef = useRef<((reason: string) => void) | null>(null);
 
   const score = useMemo(() => {
     const correctCount = questions.filter(
@@ -134,9 +137,11 @@ export function EvaluationSection({
     [answers, questions]
   );
 
-  const getOptionLabel = useCallback((index: number) => {
-    return OPTION_LABELS[index] ?? String.fromCharCode(65 + index);
-  }, []);
+  const getOptionLabel = useCallback(
+    (index: number) =>
+      OPTION_LABELS[index] ?? String.fromCharCode(65 + index),
+    []
+  );
 
   const formatTime = useCallback((seconds: number) => {
     const safeSeconds = Math.max(0, seconds);
@@ -148,9 +153,6 @@ export function EvaluationSection({
       .padStart(2, "0")}`;
   }, []);
 
-  /*
-   * Masuk fullscreen.
-   */
   const enterExamFullscreen = useCallback(async () => {
     const target = examPanelRef.current;
 
@@ -158,21 +160,22 @@ export function EvaluationSection({
       return;
     }
 
-    const fullscreenTarget = target as HTMLElement & {
+    const fullscreenElement = target as HTMLElement & {
       requestFullscreen?: () => Promise<void>;
     };
 
-    if (!fullscreenTarget.requestFullscreen) {
+    if (!fullscreenElement.requestFullscreen) {
       setStatusMessage(
-        "Browser tidak mendukung fullscreen. Ujian tetap dapat dilanjutkan."
+        "Browser tidak mendukung fullscreen. Silakan gunakan browser modern seperti Chrome atau Edge."
       );
       return;
     }
 
     try {
-      await fullscreenTarget.requestFullscreen();
-      setIsFullscreenActive(true);
+      await fullscreenElement.requestFullscreen();
+
       isFullscreenActiveRef.current = true;
+      setIsFullscreenActive(true);
     } catch {
       setStatusMessage(
         "Browser menolak masuk fullscreen. Izinkan fullscreen untuk melanjutkan ujian."
@@ -180,9 +183,6 @@ export function EvaluationSection({
     }
   }, []);
 
-  /*
-   * Submit ujian.
-   */
   const handleSubmit = useCallback(
     async (options?: SubmitOptions) => {
       if (submitAttemptedRef.current) {
@@ -191,9 +191,11 @@ export function EvaluationSection({
 
       let manualStatus = "";
 
-      if (options?.reason === "manual" && !studentName.trim()) {
-        manualStatus =
-          "Nama tidak diisi, dikirim sebagai Peserta anonim. ";
+      if (options?.reason === "manual") {
+        if (!studentName.trim()) {
+          manualStatus +=
+            "Nama tidak diisi, dikirim sebagai Peserta anonim. ";
+        }
       }
 
       if (manualStatus) {
@@ -218,15 +220,18 @@ export function EvaluationSection({
       setActiveQuestionId(null);
 
       /*
-       * Keluar fullscreen ketika ujian selesai.
+       * Keluar dari fullscreen ketika ujian selesai.
        */
       if (document.fullscreenElement) {
         try {
           await document.exitFullscreen();
         } catch {
-          // Abaikan error fullscreen.
+          // Ignore fullscreen exit failure.
         }
       }
+
+      isFullscreenActiveRef.current = false;
+      setIsFullscreenActive(false);
 
       const saved = await saveEvaluationResult({
         studentName: studentName.trim() || "Peserta anonim",
@@ -244,24 +249,19 @@ export function EvaluationSection({
       setStatusMessage(
         saved
           ? `${baseMessage}${manualStatus}Skor ${score}%`
-          : `${
-              manualStatus || baseMessage
-            }Jawaban disimpan lokal • Skor ${score}%`
+          : `${manualStatus || baseMessage}Jawaban disimpan lokal • Skor ${score}%`
       );
     },
     [answers, score, studentName]
   );
 
   /*
-   * Simpan handleSubmit terbaru ke ref.
+   * Simpan fungsi submit terbaru ke ref.
    */
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
 
-  /*
-   * Menangani pelanggaran.
-   */
   const handleViolation = useCallback((reason: string) => {
     if (!isExamActiveRef.current) {
       return;
@@ -269,17 +269,14 @@ export function EvaluationSection({
 
     const now = Date.now();
 
-    if (
-      now - lastViolationAtRef.current <
-      VIOLATION_COOLDOWN_MS
-    ) {
+    if (now - lastViolationAtRef.current < VIOLATION_COOLDOWN_MS) {
       return;
     }
 
     lastViolationAtRef.current = now;
 
-    setViolationCount((previousCount) => {
-      const nextCount = previousCount + 1;
+    setViolationCount((prev) => {
+      const nextCount = prev + 1;
 
       if (nextCount >= MAX_VIOLATIONS) {
         setViolationAlert({
@@ -318,18 +315,15 @@ export function EvaluationSection({
   }, []);
 
   /*
-   * Simpan handleViolation terbaru ke ref.
+   * Simpan fungsi violation terbaru ke ref.
    */
   useEffect(() => {
     handleViolationRef.current = handleViolation;
   }, [handleViolation]);
 
-  /*
-   * Menyimpan jawaban.
-   */
   const handleAnswer = (questionId: string, answer: string) => {
-    setAnswers((previousAnswers) => ({
-      ...previousAnswers,
+    setAnswers((prev) => ({
+      ...prev,
       [questionId]: answer,
     }));
 
@@ -338,9 +332,6 @@ export function EvaluationSection({
     );
   };
 
-  /*
-   * Tombol kirim jawaban.
-   */
   const handleKirimJawaban = useCallback(() => {
     if (missingCount > 0) {
       setShowIncompletePopup(true);
@@ -357,9 +348,6 @@ export function EvaluationSection({
     });
   }, [handleSubmit, missingCount]);
 
-  /*
-   * Memulai ujian.
-   */
   const startExam = async () => {
     if (started) {
       setStatusMessage(
@@ -395,17 +383,12 @@ export function EvaluationSection({
     );
 
     /*
-     * Fullscreen harus dipanggil dari interaksi user.
+     * Masuk fullscreen setelah user menekan tombol.
      */
     await enterExamFullscreen();
   };
 
-  /*
-   * Navigasi soal.
-   */
-  const goToQuestion = (
-    direction: "prev" | "next"
-  ) => {
+  const goToQuestion = (direction: "prev" | "next") => {
     if (!questions.length) {
       return;
     }
@@ -417,10 +400,7 @@ export function EvaluationSection({
 
     const nextIndex =
       direction === "next"
-        ? Math.min(
-            currentIndex + 1,
-            questions.length - 1
-          )
+        ? Math.min(currentIndex + 1, questions.length - 1)
         : Math.max(currentIndex - 1, 0);
 
     setActiveQuestionId(
@@ -429,7 +409,7 @@ export function EvaluationSection({
   };
 
   /*
-   * Reset ketika questions atau resetKey berubah.
+   * Reset ujian ketika questions atau resetKey berubah.
    */
   useEffect(() => {
     submitAttemptedRef.current = false;
@@ -450,13 +430,22 @@ export function EvaluationSection({
     setActiveQuestionId(questions[0]?.id ?? null);
     setShouldReenterFullscreen(false);
 
-    lastViolationAtRef.current = 0;
-    isExamActiveRef.current = false;
     isFullscreenActiveRef.current = false;
+    isExamActiveRef.current = false;
+
+    lastViolationAtRef.current = 0;
+
+    if (document.fullscreenElement) {
+      try {
+        void document.exitFullscreen();
+      } catch {
+        // Ignore fullscreen exit failure.
+      }
+    }
   }, [questions, resetKey]);
 
   /*
-   * Masuk fullscreen kembali setelah pelanggaran.
+   * Re-enter fullscreen setelah pelanggaran.
    */
   useEffect(() => {
     if (!shouldReenterFullscreen || violationAlert) {
@@ -464,6 +453,7 @@ export function EvaluationSection({
     }
 
     void enterExamFullscreen();
+
     setShouldReenterFullscreen(false);
   }, [
     shouldReenterFullscreen,
@@ -472,27 +462,47 @@ export function EvaluationSection({
   ]);
 
   /*
-   * Monitoring fullscreen.
+   * Monitor fullscreen.
+   *
+   * FIX UTAMA:
+   * Jangan menggunakan NodeJS.Timeout.
+   *
+   * window.setTimeout() di browser bertipe number.
+   *
+   * Karena itu digunakan:
+   * ReturnType<typeof window.setTimeout>
    */
   useEffect(() => {
     if (!isExamActive) {
       setIsFullscreenActive(false);
+
       isFullscreenActiveRef.current = false;
 
       if (document.fullscreenElement) {
         try {
           void document.exitFullscreen();
         } catch {
-          // Abaikan error.
+          // Ignore failure when document is no longer active fullscreen.
         }
       }
 
       return;
     }
 
-    let fullscreenCheckTimeout: ReturnType<
-      typeof window.setTimeout
-    > | null = null;
+    /*
+     * FIX:
+     * Sebelumnya:
+     *
+     * let fullscreenCheckTimeout: NodeJS.Timeout | null = null;
+     *
+     * Ini menyebabkan:
+     * Type error: Type 'number' is not assignable to type 'Timeout'.
+     *
+     * Sekarang menggunakan tipe timer browser.
+     */
+    let fullscreenCheckTimeout:
+      | ReturnType<typeof window.setTimeout>
+      | null = null;
 
     const handleFullscreenChange = () => {
       if (fullscreenCheckTimeout) {
@@ -501,26 +511,29 @@ export function EvaluationSection({
 
       fullscreenCheckTimeout = window.setTimeout(() => {
         const isNowActive =
-          document.fullscreenElement ===
-          examPanelRef.current;
+          document.fullscreenElement === examPanelRef.current;
 
         if (
           isFullscreenActiveRef.current &&
           !isNowActive &&
           isExamActiveRef.current
         ) {
-          handleViolationRef.current("shortcut");
+          handleViolationRef.current?.("shortcut");
+
           setShouldReenterFullscreen(true);
         }
 
-        isFullscreenActiveRef.current =
-          isNowActive;
-
+        isFullscreenActiveRef.current = isNowActive;
         setIsFullscreenActive(isNowActive);
 
         fullscreenCheckTimeout = null;
       }, 200);
     };
+
+    /*
+     * Coba masuk fullscreen ketika effect aktif.
+     */
+    void enterExamFullscreen();
 
     document.addEventListener(
       "fullscreenchange",
@@ -534,15 +547,24 @@ export function EvaluationSection({
       );
 
       if (fullscreenCheckTimeout) {
-        window.clearTimeout(
-          fullscreenCheckTimeout
-        );
+        window.clearTimeout(fullscreenCheckTimeout);
+        fullscreenCheckTimeout = null;
+      }
+
+      if (
+        document.fullscreenElement === examPanelRef.current
+      ) {
+        try {
+          void document.exitFullscreen();
+        } catch {
+          // Ignore failure when document is no longer active fullscreen.
+        }
       }
     };
-  }, [isExamActive]);
+  }, [enterExamFullscreen, isExamActive]);
 
   /*
-   * Notifikasi ketika ujian selesai.
+   * Notifikasi ketika evaluasi selesai.
    */
   useEffect(() => {
     if (
@@ -583,7 +605,7 @@ export function EvaluationSection({
   ]);
 
   /*
-   * Update progress.
+   * Progress update.
    */
   useEffect(() => {
     isExamActiveRef.current = isExamActive;
@@ -600,7 +622,7 @@ export function EvaluationSection({
   ]);
 
   /*
-   * Deteksi pindah tab, blur, shortcut dan refresh.
+   * Monitoring tab, window blur, shortcut, dan refresh.
    */
   useEffect(() => {
     if (!isExamActive) {
@@ -609,13 +631,13 @@ export function EvaluationSection({
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        handleViolationRef.current("visibility");
+        handleViolationRef.current?.("visibility");
       }
     };
 
     const handleWindowBlur = () => {
       if (document.visibilityState === "hidden") {
-        handleViolationRef.current("blur");
+        handleViolationRef.current?.("blur");
       }
     };
 
@@ -626,34 +648,34 @@ export function EvaluationSection({
       event.returnValue = "";
     };
 
-    const handleKeyDown = (
-      event: KeyboardEvent
-    ) => {
-      const key = event.key.toLowerCase();
-
+    const handleKeyDown = (event: KeyboardEvent) => {
       const isBlockedShortcut =
         (event.ctrlKey || event.metaKey) &&
-        ["n", "t", "w", "p"].includes(key);
+        ["n", "t", "w", "p"].includes(
+          event.key.toLowerCase()
+        );
 
       if (isBlockedShortcut) {
         event.preventDefault();
-        handleViolationRef.current("shortcut");
+
+        handleViolationRef.current?.("shortcut");
       }
 
       if (
-        event.key === "F11" ||
-        event.key === "Tab"
+        ["F11", "Alt", "Tab"].includes(event.key)
       ) {
         event.preventDefault();
-        handleViolationRef.current("shortcut");
+
+        handleViolationRef.current?.("shortcut");
       }
 
       if (
         (event.ctrlKey || event.metaKey) &&
-        key === "l"
+        event.key.toLowerCase() === "l"
       ) {
         event.preventDefault();
-        handleViolationRef.current("shortcut");
+
+        handleViolationRef.current?.("shortcut");
       }
     };
 
@@ -701,7 +723,7 @@ export function EvaluationSection({
   }, [isExamActive]);
 
   /*
-   * Hilangkan popup pelanggaran otomatis.
+   * Auto hide violation alert.
    */
   useEffect(() => {
     if (!violationAlert) {
@@ -726,8 +748,8 @@ export function EvaluationSection({
     }
 
     const timer = window.setInterval(() => {
-      setTimeRemaining((previousTime) => {
-        if (previousTime <= 1) {
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
           window.clearInterval(timer);
 
           void handleSubmit({
@@ -737,7 +759,7 @@ export function EvaluationSection({
           return 0;
         }
 
-        return previousTime - 1;
+        return prev - 1;
       });
     }, 1000);
 
@@ -755,21 +777,14 @@ export function EvaluationSection({
           grid-template-columns: 1.65fr 0.75fr;
           gap: 1.5rem;
           padding: 1rem;
-          overflow: auto;
         }
 
         #cbt-exam-panel:fullscreen > * {
           border-radius: 2rem;
         }
-
-        @media (max-width: 1024px) {
-          #cbt-exam-panel:fullscreen {
-            grid-template-columns: 1fr;
-          }
-        }
       `}</style>
 
-      {/* HEADER */}
+      {/* HEADER UJIAN */}
       <div className="rounded-[2.5rem] border border-slate-800 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-900/50">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-2xl space-y-4">
@@ -783,10 +798,9 @@ export function EvaluationSection({
               </h2>
 
               <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                Ujian berjalan dalam mode fullscreen,
-                memantau fokus layar, dan otomatis
-                menghentikan sesi ketika pelanggaran
-                mencapai batas maksimal.
+                Ujian berjalan dalam mode fullscreen, memantau fokus layar,
+                dan otomatis menghentikan sesi ketika pelanggaran mencapai
+                batas maksimal.
               </p>
             </div>
 
@@ -839,7 +853,7 @@ export function EvaluationSection({
                 {violationCount}/{MAX_VIOLATIONS} pelanggaran
               </span>
 
-              {isExamActive ? (
+              {isExamActive && (
                 <span
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${
                     isFullscreenActive
@@ -851,7 +865,7 @@ export function EvaluationSection({
                     ? "Fullscreen aktif"
                     : "Fullscreen tidak aktif"}
                 </span>
-              ) : null}
+              )}
             </div>
           </div>
 
@@ -861,26 +875,15 @@ export function EvaluationSection({
             </p>
 
             <ul className="mt-4 space-y-2 text-sm leading-6">
-              <li>
-                • Jangan berpindah tab atau membuka
-                aplikasi lain.
-              </li>
-
-              <li>
-                • Setiap pelanggaran akan dihitung
-                secara otomatis.
-              </li>
-
-              <li>
-                • Waktu ujian berjalan otomatis sampai
-                selesai.
-              </li>
+              <li>• Jangan berpindah tab atau membuka aplikasi lain.</li>
+              <li>• Setiap pelanggaran akan dihitung secara otomatis.</li>
+              <li>• Waktu ujian berjalan otomatis sampai selesai.</li>
             </ul>
           </div>
         </div>
       </div>
 
-      {/* POPUP PELANGGARAN */}
+      {/* VIOLATION ALERT */}
       {violationAlert ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-[1.75rem] border border-rose-200 bg-white p-6 shadow-2xl dark:border-rose-900/40 dark:bg-slate-900">
@@ -905,8 +908,7 @@ export function EvaluationSection({
             </p>
 
             <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300">
-              Pelanggaran {violationAlert.count}/
-              {MAX_VIOLATIONS}
+              Pelanggaran {violationAlert.count}/{MAX_VIOLATIONS}
             </div>
 
             <button
@@ -923,7 +925,7 @@ export function EvaluationSection({
         </div>
       ) : null}
 
-      {/* HASIL UJIAN */}
+      {/* RESULTS MODAL */}
       {showResultsModal && (submitted || examEnded) ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/75 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
@@ -950,8 +952,7 @@ export function EvaluationSection({
                 </p>
 
                 <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
-                  {studentName.trim() ||
-                    "Peserta anonim"}
+                  {studentName.trim() || "Peserta anonim"}
                 </p>
               </div>
 
@@ -971,9 +972,7 @@ export function EvaluationSection({
                 </p>
 
                 <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">
-                  {examEndedReason
-                    ? "Sesi dihentikan"
-                    : "Selesai"}
+                  {examEndedReason ? "Sesi dihentikan" : "Selesai"}
                 </p>
               </div>
             </div>
@@ -986,9 +985,7 @@ export function EvaluationSection({
 
             <button
               type="button"
-              onClick={() =>
-                setShowResultsModal(false)
-              }
+              onClick={() => setShowResultsModal(false)}
               className="mt-6 w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-2.5 text-sm font-extrabold text-white transition hover:opacity-95"
             >
               Tutup hasil
@@ -997,7 +994,7 @@ export function EvaluationSection({
         </div>
       ) : null}
 
-      {/* POPUP JAWABAN BELUM LENGKAP */}
+      {/* INCOMPLETE POPUP */}
       {showIncompletePopup ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-[2rem] border border-slate-700 bg-slate-900/95 p-6 shadow-2xl shadow-slate-950/40">
@@ -1018,16 +1015,13 @@ export function EvaluationSection({
             </div>
 
             <p className="mt-4 text-sm leading-7 text-slate-300">
-              Lengkapi semua pilihan jawaban sebelum
-              mengirim agar hasil evaluasi dapat diproses
-              dengan benar.
+              Lengkapi semua pilihan jawaban sebelum mengirim agar hasil
+              evaluasi dapat diproses dengan benar.
             </p>
 
             <button
               type="button"
-              onClick={() =>
-                setShowIncompletePopup(false)
-              }
+              onClick={() => setShowIncompletePopup(false)}
               className="mt-6 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:opacity-95"
             >
               Tutup
@@ -1036,7 +1030,7 @@ export function EvaluationSection({
         </div>
       ) : null}
 
-      {/* SEBELUM UJIAN */}
+      {/* START SCREEN */}
       {!started && !submitted && !examEnded ? (
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/70 sm:flex-row sm:items-center sm:justify-between">
@@ -1046,32 +1040,28 @@ export function EvaluationSection({
               </p>
 
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Klik tombol mulai ujian untuk memulai
-                sesi CBT. Setelah ujian dimulai atau
-                selesai, sesi tidak bisa dimulai ulang.
+                Klik tombol mulai ujian untuk memulai sesi CBT. Setelah ujian
+                dimulai atau selesai, sesi tidak bisa dimulai ulang.
               </p>
             </div>
 
             <button
               type="button"
               onClick={startExam}
-              disabled={!questions.length}
-              className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-indigo-700"
             >
-              {questions.length
-                ? "Mulai Ujian"
-                : "Tidak Ada Soal"}
+              Mulai Ujian
             </button>
           </div>
         </div>
       ) : isExamActive ? (
-        /* AREA UJIAN */
+        /* EXAM PANEL */
         <div
           ref={examPanelRef}
           id="cbt-exam-panel"
           className="grid min-h-[55vh] gap-4 lg:grid-cols-[1.65fr_0.75fr]"
         >
-          {/* PANEL SOAL */}
+          {/* QUESTION PANEL */}
           <div className="flex min-h-0 flex-col rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
             <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1085,8 +1075,7 @@ export function EvaluationSection({
               </div>
 
               <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                {answeredCount}/{questions.length}{" "}
-                terjawab
+                {answeredCount}/{questions.length} terjawab
               </div>
             </div>
 
@@ -1106,7 +1095,7 @@ export function EvaluationSection({
               </span>
             </div>
 
-            {/* NAMA */}
+            {/* STUDENT NAME */}
             <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/70">
               <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                 Nama peserta
@@ -1117,12 +1106,12 @@ export function EvaluationSection({
                 onChange={(event) =>
                   setStudentName(event.target.value)
                 }
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20 dark:border-slate-800 dark:bg-slate-900"
                 placeholder="Contoh: Raka Pratama"
               />
             </div>
 
-            {/* SOAL */}
+            {/* CURRENT QUESTION */}
             {currentQuestion ? (
               <div className="mt-4 rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/70 sm:p-4">
                 <div className="flex items-start gap-3">
@@ -1147,15 +1136,11 @@ export function EvaluationSection({
                       const choiceLabel =
                         getOptionLabel(optionIndex);
 
-                      const isSelected =
-                        answers[currentQuestion.id] ===
-                        option;
-
                       return (
                         <label
                           key={`${currentQuestion.id}-${optionIndex}-${option}`}
                           className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-3 text-sm font-medium transition ${
-                            isSelected
+                            answers[currentQuestion.id] === option
                               ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300"
                               : "border-slate-200 text-slate-700 hover:border-indigo-300 hover:bg-indigo-50 dark:border-slate-800 dark:text-slate-300 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-500/10"
                           }`}
@@ -1164,7 +1149,10 @@ export function EvaluationSection({
                             type="radio"
                             name={currentQuestion.id}
                             value={option}
-                            checked={isSelected}
+                            checked={
+                              answers[currentQuestion.id] ===
+                              option
+                            }
                             onChange={() =>
                               handleAnswer(
                                 currentQuestion.id,
@@ -1189,15 +1177,12 @@ export function EvaluationSection({
               </div>
             ) : null}
 
-            {/* NAVIGASI */}
+            {/* QUESTION NAVIGATION */}
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-between">
               <button
                 type="button"
-                onClick={() =>
-                  goToQuestion("prev")
-                }
-                disabled={currentIndex <= 0}
-                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                onClick={() => goToQuestion("prev")}
+                className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 <i className="fa-solid fa-chevron-left mr-2" />
                 Sebelumnya
@@ -1205,13 +1190,8 @@ export function EvaluationSection({
 
               <button
                 type="button"
-                onClick={() =>
-                  goToQuestion("next")
-                }
-                disabled={
-                  currentIndex >= questions.length - 1
-                }
-                className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-700 dark:hover:bg-slate-600"
+                onClick={() => goToQuestion("next")}
+                className="rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
               >
                 Berikutnya
                 <i className="fa-solid fa-chevron-right ml-2" />
@@ -1221,7 +1201,7 @@ export function EvaluationSection({
 
           {/* SIDEBAR */}
           <aside className="w-full space-y-4 rounded-[2rem] border border-slate-200 bg-slate-50 p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/60 lg:sticky lg:top-4 lg:h-fit lg:max-w-[340px]">
-            {/* WAKTU */}
+            {/* TIMER */}
             <div className="rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.3em] text-amber-500">
                 Waktu ujian
@@ -1238,7 +1218,7 @@ export function EvaluationSection({
               </div>
             </div>
 
-            {/* NAVIGASI SOAL */}
+            {/* QUESTION NAVIGATION */}
             <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.3em] text-indigo-500">
                 Navigasi soal
@@ -1246,54 +1226,46 @@ export function EvaluationSection({
 
               <div className="mt-3 overflow-x-auto">
                 <div className="grid min-w-[24rem] grid-cols-[repeat(auto-fit,minmax(2.7rem,1fr))] gap-2">
-                  {questions.map(
-                    (question, index) => {
-                      const isActive =
-                        question.id ===
-                        activeQuestionId;
+                  {questions.map((question, index) => {
+                    const isActive =
+                      question.id === activeQuestionId;
 
-                      const answered =
-                        Boolean(
-                          answers[question.id]
-                        );
+                    const answered = Boolean(
+                      answers[question.id]
+                    );
 
-                      const selectedOptionIndex =
-                        question.options.findIndex(
-                          (option) =>
-                            answers[question.id] ===
-                            option
-                        );
-
-                      const selectedLabel =
-                        selectedOptionIndex >= 0
-                          ? getOptionLabel(
-                              selectedOptionIndex
-                            )
-                          : null;
-
-                      return (
-                        <button
-                          key={`question-nav-${question.id}`}
-                          type="button"
-                          onClick={() =>
-                            setActiveQuestionId(
-                              question.id
-                            )
-                          }
-                          className={`rounded-2xl border px-2 py-2 text-sm font-extrabold transition ${
-                            isActive
-                              ? "border-indigo-400 bg-indigo-50 text-indigo-600 dark:border-indigo-500/50 dark:bg-indigo-500/10 dark:text-indigo-300"
-                              : answered
-                                ? "border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                          }`}
-                        >
-                          {selectedLabel ??
-                            index + 1}
-                        </button>
+                    const selectedOptionIndex =
+                      question.options.findIndex(
+                        (option) =>
+                          answers[question.id] === option
                       );
-                    }
-                  )}
+
+                    const selectedLabel =
+                      selectedOptionIndex >= 0
+                        ? getOptionLabel(
+                            selectedOptionIndex
+                          )
+                        : null;
+
+                    return (
+                      <button
+                        key={`question-nav-${question.id}`}
+                        type="button"
+                        onClick={() =>
+                          setActiveQuestionId(question.id)
+                        }
+                        className={`rounded-2xl border px-2 py-2 text-sm font-extrabold transition ${
+                          isActive
+                            ? "border-indigo-400 bg-indigo-50 text-indigo-600 dark:border-indigo-500/50 dark:bg-indigo-500/10 dark:text-indigo-300"
+                            : answered
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                        }`}
+                      >
+                        {selectedLabel ?? index + 1}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1302,13 +1274,15 @@ export function EvaluationSection({
                 onClick={handleKirimJawaban}
                 className="mt-4 w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
               >
-                Kirim jawaban
+                {submitted
+                  ? "Kirim ulang"
+                  : "Kirim jawaban"}
               </button>
             </div>
           </aside>
         </div>
       ) : (
-        /* SELESAI */
+        /* FINISHED SCREEN */
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1333,8 +1307,7 @@ export function EvaluationSection({
           </div>
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
-            Sesi ujian telah selesai dan tidak dapat
-            dimulai ulang dari awal.
+            Sesi ujian telah selesai dan tidak dapat dimulai ulang dari awal.
           </div>
         </div>
       )}
