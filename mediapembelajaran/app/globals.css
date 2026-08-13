@@ -1,0 +1,483 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  scroll-behavior: smooth;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 20%),
+    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.12), transparent 22%),
+    linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+[role="button"],
+a[href],
+summary,
+select,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+label[for],
+[tabindex]:not([tabindex="-1"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[disabled],
+a[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.25);
+  color: inherit;
+}
+
+@keyframes smoothFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes softPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-140%);
+  }
+  100% {
+    transform: translateX(140%);
+  }
+}
+
+@keyframes floatGlow {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes authSuccessPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.86) translateY(10px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes premiumThemeSweep {
+  0% {
+    opacity: 0;
+    transform: scale(0.88) translateY(16px);
+    filter: blur(8px);
+  }
+  20% {
+    opacity: 0.9;
+    transform: scale(1.01) translateY(0);
+    filter: blur(1px);
+  }
+  60% {
+    opacity: 0.95;
+    transform: scale(1.03);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2) translateY(-10px);
+    filter: blur(10px);
+  }
+}
+
+@keyframes themeOrbitalGlow {
+  0% {
+    transform: translate(-50%, -50%) scale(0.85);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes premiumPageTurn {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    filter: saturate(1);
+  }
+  50% {
+    transform: perspective(1200px) rotateY(-1.5deg) scale(0.995);
+    filter: saturate(1.04);
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) scale(1);
+    filter: saturate(1);
+  }
+}
+
+@keyframes pageTurnNext {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0) scale(1);
+  }
+  45% {
+    transform: perspective(1200px) rotateY(-12deg) translateX(-4px) scale(0.998);
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0) scale(1);
+  }
+}
+
+@keyframes modalOverlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes typewriter {
+  0% {
+    max-width: 0;
+  }
+  40% {
+    max-width: 100%;
+  }
+  100% {
+    max-width: 100%;
+  }
+}
+
+@keyframes blinkCaret {
+  50% {
+    border-color: transparent;
+  }
+}
+
+@layer utilities {
+  .typewriter {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    width: max-content;
+    max-width: 0;
+    border-right: 2px solid rgba(255,255,255,0.85);
+    box-sizing: content-box;
+    animation: typewriter 4s steps(40, end) 0.5s forwards, blinkCaret 0.75s step-end infinite;
+  }
+
+  .animate-modal-overlay {
+    animation: modalOverlayFadeIn 0.28s ease-out both;
+  }
+
+  .animate-modal-content {
+    animation: modalPopIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes pageTurnPrev {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0) scale(1);
+  }
+  45% {
+    transform: perspective(1200px) rotateY(12deg) translateX(4px) scale(0.998);
+  }
+  100% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0) scale(1);
+  }
+}
+
+.pdf-reader-book {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.025), transparent 40%),
+    radial-gradient(circle at top left, rgba(99,102,241,0.16), transparent 45%),
+    radial-gradient(circle at bottom right, rgba(14,165,233,0.12), transparent 48%),
+    #020617;
+}
+
+.pdf-reader-spine {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 12px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(148,163,184,0.38), rgba(71,85,105,0.85));
+  box-shadow: 0 0 16px rgba(191,219,254,0.4);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.pdf-reader-book::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.06), transparent 12%),
+    linear-gradient(90deg, transparent 88%, rgba(255,255,255,0.05));
+  mix-blend-mode: screen;
+}
+
+.pdf-reader-book-turning {
+  animation: premiumPageTurn 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pdf-reader-page {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.05),
+    0 28px 60px -42px rgba(0,0,0,0.95);
+}
+
+.pdf-reader-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 30%, rgba(15,23,42,0.04));
+}
+
+.pdf-reader-page-right {
+  background:
+    linear-gradient(180deg, rgba(51,65,85,0.25), rgba(15,23,42,0.7));
+}
+
+.pdf-reader-page-turn-next {
+  animation: pageTurnNext 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pdf-reader-page-turn-prev {
+  animation: pageTurnPrev 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.smooth-page {
+  animation: smoothFadeInUp 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.smooth-enter {
+  animation: smoothFadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.smooth-card {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.28s ease, background-color 0.28s ease;
+  will-change: transform, box-shadow;
+}
+
+.smooth-card:hover {
+  transform: translateY(-4px) scale(1.005);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.1);
+}
+
+.smooth-button {
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.24s ease, color 0.24s ease, border-color 0.24s ease;
+  will-change: transform, box-shadow;
+}
+
+.smooth-button:hover {
+  transform: translateY(-3px) scale(1.01);
+}
+
+.smooth-button:active {
+  transform: scale(0.98);
+}
+
+.smooth-pill {
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.24s ease, color 0.24s ease;
+}
+
+.smooth-pill:hover {
+  transform: translateY(-2px) scale(1.01);
+}
+
+.smooth-badge {
+  animation: softPulse 2.6s ease-in-out infinite;
+}
+
+.smooth-panel {
+  animation: smoothFadeInUp 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.smooth-glow {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 14px 30px rgba(79, 70, 229, 0.22);
+  animation: floatGlow 3.2s ease-in-out infinite;
+}
+
+.smooth-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.28) 50%, transparent 80%);
+  transform: translateX(-140%);
+  transition: transform 0.8s ease;
+}
+
+.smooth-glow:hover::before {
+  transform: translateX(140%);
+}
+
+.smooth-tab {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.smooth-tab::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.25s ease;
+}
+
+.smooth-tab-active::after {
+  transform: scaleX(1);
+}
+
+.auth-success-overlay {
+  animation: smoothFadeInUp 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-success-card {
+  animation: authSuccessPulse 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.theme-transition-overlay {
+  animation: premiumThemeSweep 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.theme-transition-orb {
+  animation: themeOrbitalGlow 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes loginOrbitPortrait {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.95);
+    opacity: 0.45;
+  }
+  25% {
+    transform: translate3d(-50px, 40px, 0) scale(1.05);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate3d(50px, -20px, 0) scale(1.15);
+    opacity: 1;
+  }
+  75% {
+    transform: translate3d(-20px, -60px, 0) scale(0.98);
+    opacity: 0.7;
+  }
+}
+
+@keyframes loginOrbitLandscape {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.95);
+    opacity: 0.45;
+  }
+  25% {
+    transform: translate3d(0, -45px, 0) scale(1.05);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(0, 45px, 0) scale(1.15);
+    opacity: 1;
+  }
+  75% {
+    transform: translate3d(0, -20px, 0) scale(0.98);
+    opacity: 0.7;
+  }
+}
+
+.circle {
+  position: absolute;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(129,140,248,0.65) 35%, rgba(79,70,229,0.18) 80%, transparent 100%);
+  box-shadow: 0 0 30px rgba(129, 140, 248, 0.28);
+  pointer-events: none;
+  animation-duration: 2.8s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.circle.portrait {
+  animation-name: loginOrbitPortrait;
+}
+
+.circle.landscape {
+  animation-name: loginOrbitLandscape;
+}

@@ -1,0 +1,13 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7C3AED" />
+      <stop offset="100%" stop-color="#2563EB" />
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="36" fill="#111827" />
+  <path d="M54 54H146V146H54V54Z" fill="url(#grad)" />
+  <path d="M100 68C84.3269 68 71 81.3269 71 97C71 112.673 84.3269 126 100 126C115.673 126 129 112.673 129 97C129 81.3269 115.673 68 100 68Z" fill="#111827" />
+  <path d="M88 104V72H96V94H116V104H96V122H88V104Z" fill="white" />
+  <text x="100" y="176" text-anchor="middle" fill="white" font-family="Inter, sans-serif" font-size="24" font-weight="700">UPGRISBA</text>
+</svg>
